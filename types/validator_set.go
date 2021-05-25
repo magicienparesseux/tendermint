@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -685,6 +686,8 @@ func (vals *ValidatorSet) UpdateWithChangeSet(changes []*Validator) error {
 // with a bonus for including more than +2/3 of the signatures.
 func (vals *ValidatorSet) VerifyCommit(chainID string, blockID BlockID,
 	height int64, commit *Commit) error {
+
+	defer TimeTrack(time.Now())
 
 	if vals.Size() != len(commit.Precommits) {
 		return NewErrInvalidCommitSignatures(vals.Size(), len(commit.Precommits))
