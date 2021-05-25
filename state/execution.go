@@ -276,6 +276,8 @@ func execBlockOnProxyApp(
 	block *types.Block,
 	stateDB dbm.DB,
 ) (*ABCIResponses, error) {
+	defer types.TimeTrack(time.Now())
+
 	var validTxs, invalidTxs = 0, 0
 
 	txIndex := 0

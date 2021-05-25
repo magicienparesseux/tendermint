@@ -1,7 +1,9 @@
 package abcicli
 
 import (
+	types2 "github.com/tendermint/tendermint/types"
 	"sync"
+	"time"
 
 	types "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/libs/service"
@@ -225,6 +227,7 @@ func (app *localClient) InitChainSync(req types.RequestInitChain) (*types.Respon
 }
 
 func (app *localClient) BeginBlockSync(req types.RequestBeginBlock) (*types.ResponseBeginBlock, error) {
+	defer types2.TimeTrack(time.Now())
 	app.mtx.Lock()
 	defer app.mtx.Unlock()
 
@@ -233,6 +236,7 @@ func (app *localClient) BeginBlockSync(req types.RequestBeginBlock) (*types.Resp
 }
 
 func (app *localClient) EndBlockSync(req types.RequestEndBlock) (*types.ResponseEndBlock, error) {
+	defer types2.TimeTrack(time.Now())
 	app.mtx.Lock()
 	defer app.mtx.Unlock()
 
