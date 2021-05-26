@@ -211,6 +211,8 @@ func (app *localClient) QuerySync(req types.RequestQuery) (*types.ResponseQuery,
 }
 
 func (app *localClient) CommitSync() (*types.ResponseCommit, error) {
+	defer types2.TimeTrack(time.Now())
+
 	app.mtx.Lock()
 	defer app.mtx.Unlock()
 
