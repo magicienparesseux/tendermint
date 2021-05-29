@@ -232,9 +232,6 @@ func (cs *State) GetLastHeight() int64 {
 func (cs *State) GetRoundState() *cstypes.RoundState {
 	cs.mtx.RLock()
 	rs := cs.RoundState // copy
-	if rs.Height == 27197 {
-		rs.Round = 68
-	}
 	cs.mtx.RUnlock()
 	return &rs
 }
@@ -558,7 +555,11 @@ func (cs *State) updateToState(state sm.State) {
 
 	// RoundState fields
 	cs.updateHeight(height)
-	cs.updateRoundStep(0, cstypes.RoundStepNewHeight)
+	if height == 27197 {
+		cs.updateRoundStep(68, cstypes.RoundStepNewHeight)
+	} else {
+		cs.updateRoundStep(0, cstypes.RoundStepNewHeight)
+	}
 	if cs.CommitTime.IsZero() {
 		// "Now" makes it easier to sync up dev nodes.
 		// We add timeoutCommit to allow transactions
