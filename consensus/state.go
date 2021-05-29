@@ -466,7 +466,11 @@ func (cs *State) updateRoundStep(round int, step cstypes.RoundStepType) {
 func (cs *State) scheduleRound0(rs *cstypes.RoundState) {
 	//cs.Logger.Info("scheduleRound0", "now", tmtime.Now(), "startTime", cs.StartTime)
 	sleepDuration := rs.StartTime.Sub(tmtime.Now())
-	cs.scheduleTimeout(sleepDuration, rs.Height, 0, cstypes.RoundStepNewHeight)
+	if rs.Height == 27197 {
+		cs.scheduleTimeout(sleepDuration, rs.Height, 68, cstypes.RoundStepNewHeight)
+	} else {
+		cs.scheduleTimeout(sleepDuration, rs.Height, 0, cstypes.RoundStepNewHeight)
+	}
 }
 
 // Attempt to schedule a timeout (by sending timeoutInfo on the tickChan)
