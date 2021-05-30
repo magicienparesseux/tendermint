@@ -311,6 +311,10 @@ func (cs *State) OnStart() error {
 
 	// we may have lost some votes if the process crashed
 	// reload from consensus log to catchup
+	// TODO
+	if cs.Height == 27197 {
+		cs.doWALCatchup = false
+	}
 	if cs.doWALCatchup {
 		if err := cs.catchupReplay(cs.Height); err != nil {
 			// don't try to recover from data corruption error
@@ -336,12 +340,23 @@ go run scripts/json2wal/main.go wal.json $WALFILE # rebuild the file without cor
 		}
 	}
 
+	if cs.Height == 27197 {
+		cs.updateRoundStep(71, cstypes.RoundStepNewHeight)
+		cs.Votes.SetRound(71)
+	}
+
 	// now start the receiveRoutine
 	go cs.receiveRoutine(0)
 
-	// schedule the first round!
-	// use GetRoundState so we don't race the receiveRoutine for access
-	cs.scheduleRound0(cs.GetRoundState())
+	if cs.Height == 27197 {
+		// schedule the first round!
+		// use GetRoundState so we don't race the receiveRoutine for access
+		cs.scheduleRound100(cs.GetRoundState())
+	} else {
+		// schedule the first round!
+		// use GetRoundState so we don't race the receiveRoutine for access
+		cs.scheduleRound0(cs.GetRoundState())
+	}
 
 	return nil
 }
@@ -467,7 +482,15 @@ func (cs *State) scheduleRound0(rs *cstypes.RoundState) {
 	//cs.Logger.Info("scheduleRound0", "now", tmtime.Now(), "startTime", cs.StartTime)
 	sleepDuration := rs.StartTime.Sub(tmtime.Now())
 
-	cs.scheduleTimeout(sleepDuration, rs.Height, 0, cstypes.RoundStepNewHeight)
+	cs.scheduleTimeout(sleepDuration, rs.Height, 0, cstypes.RoundStepNewRound)
+
+}
+
+// enterNewRound(height, 100) at cs.StartTime.
+func (cs *State) scheduleRound100(rs *cstypes.RoundState) {
+	//cs.Logger.Info("scheduleRound0", "now", tmtime.Now(), "startTime", cs.StartTime)
+
+	cs.scheduleTimeout(0, rs.Height, 71, cstypes.RoundStepNewRound)
 
 }
 
@@ -841,10 +864,6 @@ func (cs *State) enterNewRound(height int64, round int) {
 
 	logger.Info(fmt.Sprintf("enterNewRound(%v/%v). Current: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step))
 
-	if height == 27197 && round < 68 {
-		round = 68
-	}
-
 	// Increment validators if necessary
 	validators := cs.Validators
 	if cs.Round < round {
@@ -855,7 +874,7 @@ func (cs *State) enterNewRound(height int64, round int) {
 	// Setup new round
 	// we don't fire newStep for this step,
 	// but we fire an event, so update the round step first
-	cs.updateRoundStep(round, cstypes.RoundStepNewRound)
+	cs.updateRoundStep(round, cstypes.RoundStepNewHeight)
 	cs.Validators = validators
 	if round == 0 {
 		// We've already reset these upon new height,
