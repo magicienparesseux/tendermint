@@ -52,6 +52,9 @@ func (cs *State) readReplayMessage(msg *TimedWALMessage, newStepSub types.Subscr
 	// for logging
 	switch m := msg.Msg.(type) {
 	case types.EventDataRoundState:
+		if m.Height == 27197 && m.Round < 68 {
+			return nil
+		}
 		cs.Logger.Info("Replay: New Step", "height", m.Height, "round", m.Round, "step", m.Step)
 		// these are playback checks
 		ticker := time.After(time.Second * 2)
@@ -76,12 +79,21 @@ func (cs *State) readReplayMessage(msg *TimedWALMessage, newStepSub types.Subscr
 		switch msg := m.Msg.(type) {
 		case *ProposalMessage:
 			p := msg.Proposal
+			if p.Height == 27197 && p.Round < 68 {
+				return nil
+			}
 			cs.Logger.Info("Replay: Proposal", "height", p.Height, "round", p.Round, "header",
 				p.BlockID.PartsHeader, "pol", p.POLRound, "peer", peerID)
 		case *BlockPartMessage:
+			if msg.Height == 27197 && msg.Round < 68 {
+				return nil
+			}
 			cs.Logger.Info("Replay: BlockPart", "height", msg.Height, "round", msg.Round, "peer", peerID)
 		case *VoteMessage:
 			v := msg.Vote
+			if v.Height == 27197 && v.Round < 68 {
+				return nil
+			}
 			cs.Logger.Info("Replay: Vote", "height", v.Height, "round", v.Round, "type", v.Type,
 				"blockID", v.BlockID, "peer", peerID)
 		}
