@@ -312,7 +312,7 @@ func (cs *State) OnStart() error {
 	// we may have lost some votes if the process crashed
 	// reload from consensus log to catchup
 	// TODO
-	if cs.Height == 27197 {
+	if cs.Height == 60 {
 		cs.doWALCatchup = false
 	}
 	if cs.doWALCatchup {
@@ -340,7 +340,7 @@ go run scripts/json2wal/main.go wal.json $WALFILE # rebuild the file without cor
 		}
 	}
 
-	if cs.Height == 27197 {
+	if cs.Height == 60 {
 		cs.updateRoundStep(71, cstypes.RoundStepNewHeight)
 		cs.Votes.SetRound(71)
 	}
@@ -348,7 +348,7 @@ go run scripts/json2wal/main.go wal.json $WALFILE # rebuild the file without cor
 	// now start the receiveRoutine
 	go cs.receiveRoutine(0)
 
-	if cs.Height == 27197 {
+	if cs.Height == 60 {
 		// schedule the first round!
 		// use GetRoundState so we don't race the receiveRoutine for access
 		cs.scheduleRound100(cs.GetRoundState())
