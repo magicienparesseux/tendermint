@@ -841,9 +841,9 @@ func (cs *State) enterNewRound(height int64, round int) {
 
 	logger.Info(fmt.Sprintf("enterNewRound(%v/%v). Current: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step))
 
-	//if height == 27197 && round < 68 {
-	//	round = 68
-	//}
+	if height == 27197 && round < 68 {
+		round = 68
+	}
 
 	// Increment validators if necessary
 	validators := cs.Validators
