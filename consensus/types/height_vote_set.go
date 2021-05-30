@@ -244,6 +244,9 @@ func (hvs *HeightVoteSet) toAllRoundVotes() []roundVotes {
 	allVotes := make([]roundVotes, totalRounds)
 	// rounds 0 ~ hvs.round inclusive
 	for round := 0; round < totalRounds; round++ {
+		if hvs.round - round > 1 {
+			continue
+		}
 		allVotes[round] = roundVotes{
 			Round:              round,
 			Prevotes:           hvs.roundVoteSets[round].Prevotes.VoteStrings(),
