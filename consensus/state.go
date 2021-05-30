@@ -466,11 +466,9 @@ func (cs *State) updateRoundStep(round int, step cstypes.RoundStepType) {
 func (cs *State) scheduleRound0(rs *cstypes.RoundState) {
 	//cs.Logger.Info("scheduleRound0", "now", tmtime.Now(), "startTime", cs.StartTime)
 	sleepDuration := rs.StartTime.Sub(tmtime.Now())
-	if rs.Height == 27197 {
-		cs.scheduleTimeout(sleepDuration, rs.Height, 68, cstypes.RoundStepNewHeight)
-	} else {
-		cs.scheduleTimeout(sleepDuration, rs.Height, 0, cstypes.RoundStepNewHeight)
-	}
+
+	cs.scheduleTimeout(sleepDuration, rs.Height, 0, cstypes.RoundStepNewHeight)
+
 }
 
 // Attempt to schedule a timeout (by sending timeoutInfo on the tickChan)
@@ -555,11 +553,9 @@ func (cs *State) updateToState(state sm.State) {
 
 	// RoundState fields
 	cs.updateHeight(height)
-	if height == 27197 {
-		cs.updateRoundStep(68, cstypes.RoundStepNewHeight)
-	} else {
-		cs.updateRoundStep(0, cstypes.RoundStepNewHeight)
-	}
+
+	cs.updateRoundStep(0, cstypes.RoundStepNewHeight)
+
 	if cs.CommitTime.IsZero() {
 		// "Now" makes it easier to sync up dev nodes.
 		// We add timeoutCommit to allow transactions
@@ -844,6 +840,10 @@ func (cs *State) enterNewRound(height int64, round int) {
 	}
 
 	logger.Info(fmt.Sprintf("enterNewRound(%v/%v). Current: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step))
+
+	if height == 27197 && round < 68 {
+		round = 68
+	}
 
 	// Increment validators if necessary
 	validators := cs.Validators
