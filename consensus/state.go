@@ -3,6 +3,7 @@ package consensus
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"reflect"
 	"runtime/debug"
 	"sync"
@@ -1094,6 +1095,17 @@ func (cs *State) enterPrevote(height int64, round int) {
 
 func (cs *State) defaultDoPrevote(height int64, round int) {
 	logger := cs.Logger.With("height", height, "round", round)
+
+	if height == 60 {
+		cs.signAddVote(types.PrevoteType, nil, types.PartSetHeader{})
+		return
+	}
+
+	if height == 60 && round == 5 {
+		cs.signAddVote(types.PrevoteType, nil, types.PartSetHeader{})
+		os.Exit(1)
+		return
+	}
 
 	// If a block is locked, prevote that.
 	if cs.LockedBlock != nil {
