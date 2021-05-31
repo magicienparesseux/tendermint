@@ -53,7 +53,7 @@ const (
 	biasToSelectNewPeers = 30 // 70 to select good peers
 
 	// if a peer is marked bad, it will be banned for at least this time period
-	defaultBanTime = 24 * time.Hour
+	defaultBanTime = 1 * time.Millisecond
 )
 
 type errMaxAttemptsToDial struct {
