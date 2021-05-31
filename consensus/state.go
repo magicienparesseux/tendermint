@@ -791,9 +791,17 @@ func (cs *State) handleTimeout(ti timeoutInfo, rs cstypes.RoundState) {
 	case cstypes.RoundStepNewHeight:
 		// NewRound event fired from enterNewRound.
 		// XXX: should we fire timeout here (for timeout commit)?
-		cs.enterNewRound(ti.Height, ti.Round)
+		if rs.Height == 60 {
+			cs.enterNewRound(ti.Height, rs.Round)
+		} else {
+			cs.enterNewRound(ti.Height, 0)
+		}
 	case cstypes.RoundStepNewRound:
-		cs.enterPropose(ti.Height, 0)
+		if rs.Height == 60 {
+			cs.enterPropose(ti.Height, rs.Round)
+		} else {
+			cs.enterPropose(ti.Height, 0)
+		}
 	case cstypes.RoundStepPropose:
 		cs.eventBus.PublishEventTimeoutPropose(cs.RoundStateEvent())
 		cs.enterPrevote(ti.Height, ti.Round)
