@@ -312,7 +312,7 @@ func (cs *State) OnStart() error {
 	// we may have lost some votes if the process crashed
 	// reload from consensus log to catchup
 	// TODO
-	if cs.Height == 60 {
+	if cs.Height == 27197 {
 		cs.doWALCatchup = false
 	}
 	if cs.doWALCatchup {
@@ -340,7 +340,7 @@ go run scripts/json2wal/main.go wal.json $WALFILE # rebuild the file without cor
 		}
 	}
 
-	if cs.Height == 60 {
+	if cs.Height == 27197 {
 		cs.updateRoundStep(71, cstypes.RoundStepNewHeight)
 		cs.Votes.SetRound(71)
 	}
@@ -348,7 +348,7 @@ go run scripts/json2wal/main.go wal.json $WALFILE # rebuild the file without cor
 	// now start the receiveRoutine
 	go cs.receiveRoutine(0)
 
-	if cs.Height == 60 {
+	if cs.Height == 27197 {
 		// schedule the first round!
 		// use GetRoundState so we don't race the receiveRoutine for access
 		cs.scheduleRound100(cs.GetRoundState())
@@ -791,13 +791,13 @@ func (cs *State) handleTimeout(ti timeoutInfo, rs cstypes.RoundState) {
 	case cstypes.RoundStepNewHeight:
 		// NewRound event fired from enterNewRound.
 		// XXX: should we fire timeout here (for timeout commit)?
-		if rs.Height == 60 {
+		if rs.Height == 27197 {
 			cs.enterNewRound(ti.Height, rs.Round)
 		} else {
 			cs.enterNewRound(ti.Height, 0)
 		}
 	case cstypes.RoundStepNewRound:
-		if rs.Height == 60 {
+		if rs.Height == 27197 {
 			cs.enterPropose(ti.Height, rs.Round)
 		} else {
 			cs.enterPropose(ti.Height, 0)
