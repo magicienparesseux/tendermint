@@ -34,6 +34,11 @@ var (
 	ErrVoteHeightMismatch       = errors.New("error vote height mismatch")
 )
 
+var chainHaltHeight = int64(60)
+var chainHaltRound = 100
+var timeoutWait = time.Second * 3
+var timeoutPropose = time.Second * 20
+
 //-----------------------------------------------------------------------------
 
 var (
@@ -312,7 +317,8 @@ func (cs *State) OnStart() error {
 	// we may have lost some votes if the process crashed
 	// reload from consensus log to catchup
 	// TODO
-	if cs.Height == 27197 {
+	if cs.Height == chainHaltHeight {
+		cs.Logger.Info(fmt.Sprintf("Skipping Wal Replay For Height %d Patch", chainHaltHeight))
 		cs.doWALCatchup = false
 	}
 	if cs.doWALCatchup {
@@ -340,18 +346,18 @@ go run scripts/json2wal/main.go wal.json $WALFILE # rebuild the file without cor
 		}
 	}
 
-	if cs.Height == 27197 {
-		cs.updateRoundStep(71, cstypes.RoundStepNewHeight)
-		cs.Votes.SetRound(71)
+	if cs.Height == chainHaltHeight {
+		cs.updateRoundStep(chainHaltRound, cstypes.RoundStepNewHeight)
+		cs.Votes.SetRound(chainHaltRound)
 	}
 
 	// now start the receiveRoutine
 	go cs.receiveRoutine(0)
 
-	if cs.Height == 27197 {
+	if cs.Height == chainHaltHeight {
 		// schedule the first round!
 		// use GetRoundState so we don't race the receiveRoutine for access
-		cs.scheduleRound100(cs.GetRoundState())
+		cs.scheduleRoundCH(cs.GetRoundState())
 	} else {
 		// schedule the first round!
 		// use GetRoundState so we don't race the receiveRoutine for access
@@ -481,17 +487,13 @@ func (cs *State) updateRoundStep(round int, step cstypes.RoundStepType) {
 func (cs *State) scheduleRound0(rs *cstypes.RoundState) {
 	//cs.Logger.Info("scheduleRound0", "now", tmtime.Now(), "startTime", cs.StartTime)
 	sleepDuration := rs.StartTime.Sub(tmtime.Now())
-
-	cs.scheduleTimeout(sleepDuration, rs.Height, 0, cstypes.RoundStepNewRound)
-
+	cs.scheduleTimeout(sleepDuration, rs.Height, 0, cstypes.RoundStepNewHeight)
 }
 
-// enterNewRound(height, 100) at cs.StartTime.
-func (cs *State) scheduleRound100(rs *cstypes.RoundState) {
-	//cs.Logger.Info("scheduleRound0", "now", tmtime.Now(), "startTime", cs.StartTime)
-
-	cs.scheduleTimeout(0, rs.Height, 71, cstypes.RoundStepNewRound)
-
+// enterNewRound(height, chainHaltRound) at cs.StartTime.
+func (cs *State) scheduleRoundCH(rs *cstypes.RoundState) {
+	cs.Logger.Info(fmt.Sprintf("Schedule Round %d", chainHaltRound))
+	cs.scheduleTimeout(0, rs.Height, chainHaltRound, cstypes.RoundStepNewRound)
 }
 
 // Attempt to schedule a timeout (by sending timeoutInfo on the tickChan)
@@ -576,9 +578,7 @@ func (cs *State) updateToState(state sm.State) {
 
 	// RoundState fields
 	cs.updateHeight(height)
-
 	cs.updateRoundStep(0, cstypes.RoundStepNewHeight)
-
 	if cs.CommitTime.IsZero() {
 		// "Now" makes it easier to sync up dev nodes.
 		// We add timeoutCommit to allow transactions
@@ -791,13 +791,14 @@ func (cs *State) handleTimeout(ti timeoutInfo, rs cstypes.RoundState) {
 	case cstypes.RoundStepNewHeight:
 		// NewRound event fired from enterNewRound.
 		// XXX: should we fire timeout here (for timeout commit)?
-		if rs.Height == 27197 {
+		if rs.Height == chainHaltHeight {
 			cs.enterNewRound(ti.Height, rs.Round)
 		} else {
 			cs.enterNewRound(ti.Height, 0)
 		}
 	case cstypes.RoundStepNewRound:
-		if rs.Height == 27197 {
+		if rs.Height == chainHaltHeight {
+			cs.Logger.Info("Enter Round Step New Round")
 			cs.enterPropose(ti.Height, rs.Round)
 		} else {
 			cs.enterPropose(ti.Height, 0)
@@ -882,7 +883,7 @@ func (cs *State) enterNewRound(height int64, round int) {
 	// Setup new round
 	// we don't fire newStep for this step,
 	// but we fire an event, so update the round step first
-	cs.updateRoundStep(round, cstypes.RoundStepNewHeight)
+	cs.updateRoundStep(round, cstypes.RoundStepNewRound)
 	cs.Validators = validators
 	if round == 0 {
 		// We've already reset these upon new height,
@@ -959,9 +960,14 @@ func (cs *State) enterPropose(height int64, round int) {
 			cs.enterPrevote(height, cs.Round)
 		}
 	}()
-
-	// If we don't get the proposal and all block parts quick enough, enterPrevote
-	cs.scheduleTimeout(cs.config.Propose(round), height, round, cstypes.RoundStepPropose)
+	if height == chainHaltHeight {
+		cs.Logger.Info(fmt.Sprintf("Wait for up to %d minutes for the proposal block", timeoutPropose))
+		// If we don't get the proposal and all block parts quick enough, enterPrevote
+		cs.scheduleTimeout(time.Minute*timeoutPropose, height, round, cstypes.RoundStepPropose)
+	} else {
+		// If we don't get the proposal and all block parts quick enough, enterPrevote
+		cs.scheduleTimeout(cs.config.Propose(round), height, round, cstypes.RoundStepPropose)
+	}
 
 	// Nothing more to do if we're not a validator
 	if cs.privValidator == nil {
@@ -1184,9 +1190,12 @@ func (cs *State) enterPrevoteWait(height int64, round int) {
 		cs.updateRoundStep(round, cstypes.RoundStepPrevoteWait)
 		cs.newStep()
 	}()
-
-	// Wait for some more prevotes; enterPrecommit
-	cs.scheduleTimeout(cs.config.Prevote(round), height, round, cstypes.RoundStepPrevoteWait)
+	if height == chainHaltHeight {
+		cs.scheduleTimeout(time.Minute*timeoutWait, height, round, cstypes.RoundStepPrevoteWait)
+	} else {
+		// Wait for some more prevotes; enterNewRound
+		cs.scheduleTimeout(cs.config.Prevote(round), height, round, cstypes.RoundStepPrevoteWait)
+	}
 }
 
 // Enter: `timeoutPrevote` after any +2/3 prevotes.
@@ -1319,9 +1328,12 @@ func (cs *State) enterPrecommitWait(height int64, round int) {
 		cs.newStep()
 	}()
 
-	// Wait for some more precommits; enterNewRound
-	cs.scheduleTimeout(cs.config.Precommit(round), height, round, cstypes.RoundStepPrecommitWait)
-
+	if height == chainHaltHeight {
+		cs.scheduleTimeout(time.Minute*timeoutWait, height, round, cstypes.RoundStepPrecommitWait)
+	} else {
+		// Wait for some more precommits; enterNewRound
+		cs.scheduleTimeout(cs.config.Precommit(round), height, round, cstypes.RoundStepPrecommitWait)
+	}
 }
 
 // Enter: +2/3 precommits for block
