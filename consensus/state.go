@@ -34,10 +34,10 @@ var (
 	ErrVoteHeightMismatch       = errors.New("error vote height mismatch")
 )
 
-var chainHaltHeight = int64(27197)
+var chainHaltHeight = int64(60)
 var chainHaltRound = 100
-var timeoutWait = time.Minute * 3
-var timeoutPropose = time.Minute * 20
+var timeoutWait = time.Second * 2
+var timeoutPropose = time.Second * 3
 
 //-----------------------------------------------------------------------------
 
@@ -963,7 +963,7 @@ func (cs *State) enterPropose(height int64, round int) {
 	if height == chainHaltHeight {
 		cs.Logger.Info(fmt.Sprintf("Wait for up to %d minutes for the proposal block", timeoutPropose))
 		// If we don't get the proposal and all block parts quick enough, enterPrevote
-		cs.scheduleTimeout(time.Minute*timeoutPropose, height, round, cstypes.RoundStepPropose)
+		cs.scheduleTimeout(timeoutPropose, height, round, cstypes.RoundStepPropose)
 	} else {
 		// If we don't get the proposal and all block parts quick enough, enterPrevote
 		cs.scheduleTimeout(cs.config.Propose(round), height, round, cstypes.RoundStepPropose)
@@ -1191,7 +1191,7 @@ func (cs *State) enterPrevoteWait(height int64, round int) {
 		cs.newStep()
 	}()
 	if height == chainHaltHeight {
-		cs.scheduleTimeout(time.Minute*timeoutWait, height, round, cstypes.RoundStepPrevoteWait)
+		cs.scheduleTimeout(timeoutWait, height, round, cstypes.RoundStepPrevoteWait)
 	} else {
 		// Wait for some more prevotes; enterNewRound
 		cs.scheduleTimeout(cs.config.Prevote(round), height, round, cstypes.RoundStepPrevoteWait)
@@ -1329,7 +1329,7 @@ func (cs *State) enterPrecommitWait(height int64, round int) {
 	}()
 
 	if height == chainHaltHeight {
-		cs.scheduleTimeout(time.Minute*timeoutWait, height, round, cstypes.RoundStepPrecommitWait)
+		cs.scheduleTimeout(timeoutWait, height, round, cstypes.RoundStepPrecommitWait)
 	} else {
 		// Wait for some more precommits; enterNewRound
 		cs.scheduleTimeout(cs.config.Precommit(round), height, round, cstypes.RoundStepPrecommitWait)
