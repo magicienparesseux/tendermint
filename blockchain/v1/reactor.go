@@ -19,11 +19,11 @@ import (
 const (
 	// BlockchainChannel is a channel for blocks and status updates (`BlockStore` height)
 	BlockchainChannel = byte(0x40)
-	trySyncIntervalMS = 25
-	trySendIntervalMS = 25
+	trySyncIntervalMS = 10
+	trySendIntervalMS = 10
 
 	// ask for best height every 10s
-	statusUpdateIntervalSeconds = 25
+	statusUpdateIntervalSeconds = 10
 
 	// NOTE: keep up to date with bcBlockResponseMessage
 	bcBlockResponseMessagePrefixSize   = 4
@@ -36,9 +36,9 @@ const (
 var (
 	// Maximum number of requests that can be pending per peer, i.e. for which requests have been sent but blocks
 	// have not been received.
-	maxRequestsPerPeer = 100
+	maxRequestsPerPeer = 20
 	// Maximum number of block requests for the reactor, pending or for which blocks have been received.
-	maxNumRequests = 256
+	maxNumRequests = 64
 )
 
 type consensusReactor interface {
@@ -85,7 +85,7 @@ func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *st
 			store.Height()))
 	}
 
-	const capacity = 10000
+	const capacity = 1000
 	eventsFromFSMCh := make(chan bcFsmMessage, capacity)
 	messagesForFSMCh := make(chan bcReactorMessage, capacity)
 	errorsForFSMCh := make(chan bcReactorMessage, capacity)
@@ -160,7 +160,7 @@ func (bcR *BlockchainReactor) GetChannels() []*p2p.ChannelDescriptor {
 		{
 			ID:                  BlockchainChannel,
 			Priority:            10,
-			SendQueueCapacity:   20000,
+			SendQueueCapacity:   2000,
 			RecvBufferCapacity:  50 * 4096,
 			RecvMessageCapacity: maxMsgSize,
 		},
