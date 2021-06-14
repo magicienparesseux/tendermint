@@ -687,7 +687,7 @@ func (vals *ValidatorSet) UpdateWithChangeSet(changes []*Validator) error {
 func (vals *ValidatorSet) VerifyCommit(chainID string, blockID BlockID,
 	height int64, commit *Commit) error {
 
-	defer TimeTrack(time.Now())
+	defer TimeTrack(time.Now(), nil)
 
 	if vals.Size() != len(commit.Precommits) {
 		return NewErrInvalidCommitSignatures(vals.Size(), len(commit.Precommits))
@@ -718,7 +718,7 @@ func (vals *ValidatorSet) VerifyCommit(chainID string, blockID BlockID,
 // signatures.
 func (vals *ValidatorSet) VerifyCommitLight(chainID string, blockID BlockID,
 	height int64, commit *Commit) error {
-	defer TimeTrack(time.Now())
+	defer TimeTrack(time.Now(), nil)
 
 	if vals.Size() != len(commit.Precommits) {
 		return NewErrInvalidCommitSignatures(vals.Size(), len(commit.Precommits))

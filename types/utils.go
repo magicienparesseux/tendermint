@@ -2,7 +2,7 @@ package types
 
 import (
 	"fmt"
-	"log"
+	tmlog "github.com/tendermint/tendermint/libs/log"
 	"reflect"
 	"regexp"
 	"runtime"
@@ -35,7 +35,7 @@ func isEmpty(o interface{}) bool {
 	}
 }
 
-func TimeTrack(start time.Time) {
+func TimeTrack(start time.Time, log tmlog.Logger) {
 	elapsed := time.Since(start)
 
 	// Skip this function, and fetch the PC and file for its parent.
@@ -48,5 +48,8 @@ func TimeTrack(start time.Time) {
 	runtimeFunc := regexp.MustCompile(`^.*\.(.*)$`)
 	name := runtimeFunc.ReplaceAllString(funcObj.Name(), "$1")
 
-	log.Println(fmt.Sprintf("%s took %s", name, elapsed))
+	if log == nil {
+		log = tmlog.NewNopLogger()
+	}
+	log.Debug(fmt.Sprintf("%s took %s", name, elapsed))
 }

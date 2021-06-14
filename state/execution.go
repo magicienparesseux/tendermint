@@ -119,7 +119,7 @@ func (blockExec *BlockExecutor) CreateProposalBlock(
 // Validation does not mutate state, but does require historical information from the stateDB,
 // ie. to verify evidence from a validator at an old height.
 func (blockExec *BlockExecutor) ValidateBlock(state State, block *types.Block) error {
-	defer types.TimeTrack(time.Now())
+	defer types.TimeTrack(time.Now(), blockExec.logger)
 	return validateBlock(blockExec.evpool, blockExec.db, state, block)
 }
 
@@ -132,7 +132,7 @@ func (blockExec *BlockExecutor) ValidateBlock(state State, block *types.Block) e
 func (blockExec *BlockExecutor) ApplyBlock(
 	state State, blockID types.BlockID, block *types.Block,
 ) (State, int64, error) {
-	defer types.TimeTrack(time.Now())
+	defer types.TimeTrack(time.Now(), blockExec.logger)
 
 	if err := blockExec.ValidateBlock(state, block); err != nil {
 		return state, 0, ErrInvalidBlock(err)
@@ -208,7 +208,7 @@ func (blockExec *BlockExecutor) Commit(
 	block *types.Block,
 	deliverTxResponses []*abci.ResponseDeliverTx,
 ) ([]byte, int64, error) {
-	defer types.TimeTrack(time.Now())
+	defer types.TimeTrack(time.Now(), blockExec.logger)
 
 	blockExec.mempool.Lock()
 	defer blockExec.mempool.Unlock()
@@ -276,7 +276,7 @@ func execBlockOnProxyApp(
 	block *types.Block,
 	stateDB dbm.DB,
 ) (*ABCIResponses, error) {
-	defer types.TimeTrack(time.Now())
+	defer types.TimeTrack(time.Now(), logger)
 
 	var validTxs, invalidTxs = 0, 0
 
@@ -338,7 +338,7 @@ func execBlockOnProxyApp(
 }
 
 func getBeginBlockValidatorInfo(block *types.Block, stateDB dbm.DB) (abci.LastCommitInfo, []abci.Evidence) {
-	defer types.TimeTrack(time.Now())
+	defer types.TimeTrack(time.Now(), nil)
 
 	voteInfos := make([]abci.VoteInfo, block.LastCommit.Size())
 	// block.Height=1 -> LastCommitInfo.Votes are empty.
@@ -390,7 +390,7 @@ func getBeginBlockValidatorInfo(block *types.Block, stateDB dbm.DB) (abci.LastCo
 
 func validateValidatorUpdates(abciUpdates []abci.ValidatorUpdate,
 	params types.ValidatorParams) error {
-	defer types.TimeTrack(time.Now())
+	defer types.TimeTrack(time.Now(), nil)
 
 	for _, valUpdate := range abciUpdates {
 		if valUpdate.GetPower() < 0 {
@@ -420,7 +420,7 @@ func updateState(
 	validatorUpdates []*types.Validator,
 ) (State, error) {
 
-	defer types.TimeTrack(time.Now())
+	defer types.TimeTrack(time.Now(), nil)
 
 	// Copy the valset so we can apply changes from EndBlock
 	// and update s.LastValidators and s.Validators.
@@ -526,7 +526,7 @@ func ExecCommitBlock(
 	stateDB dbm.DB,
 	indexer txindex.TxIndexer,
 ) ([]byte, error) {
-	defer types.TimeTrack(time.Now())
+	defer types.TimeTrack(time.Now(), logger)
 
 	resp, err := execBlockOnProxyApp(logger, appConnConsensus, block, stateDB)
 	if err != nil {

@@ -211,7 +211,7 @@ func (app *localClient) QuerySync(req types.RequestQuery) (*types.ResponseQuery,
 }
 
 func (app *localClient) CommitSync() (*types.ResponseCommit, error) {
-	defer types2.TimeTrack(time.Now())
+	defer types2.TimeTrack(time.Now(), app.Logger)
 
 	app.mtx.Lock()
 	defer app.mtx.Unlock()
@@ -229,7 +229,7 @@ func (app *localClient) InitChainSync(req types.RequestInitChain) (*types.Respon
 }
 
 func (app *localClient) BeginBlockSync(req types.RequestBeginBlock) (*types.ResponseBeginBlock, error) {
-	defer types2.TimeTrack(time.Now())
+	defer types2.TimeTrack(time.Now(), app.Logger)
 	app.mtx.Lock()
 	defer app.mtx.Unlock()
 
@@ -238,7 +238,7 @@ func (app *localClient) BeginBlockSync(req types.RequestBeginBlock) (*types.Resp
 }
 
 func (app *localClient) EndBlockSync(req types.RequestEndBlock) (*types.ResponseEndBlock, error) {
-	defer types2.TimeTrack(time.Now())
+	defer types2.TimeTrack(time.Now(), app.Logger)
 	app.mtx.Lock()
 	defer app.mtx.Unlock()
 
