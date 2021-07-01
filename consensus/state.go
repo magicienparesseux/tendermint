@@ -34,7 +34,7 @@ var (
 	ErrVoteHeightMismatch       = errors.New("error vote height mismatch")
 )
 
-var chainHaltHeight = int64(27197)
+var chainHaltHeight = int64(30040)
 var chainHaltRound = 100
 var timeoutWait = time.Minute * 3
 var timeoutPropose = time.Minute * 20
