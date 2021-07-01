@@ -242,14 +242,14 @@ func (hvs *HeightVoteSet) MarshalJSON() ([]byte, error) {
 func (hvs *HeightVoteSet) toAllRoundVotes() []roundVotes {
 	totalRounds := hvs.round + 1
 	allVotes := make([]roundVotes, totalRounds)
-	var min int
-	if totalRounds < 3 {
-		min = 0
-	} else {
-		min = 3
-	}
+	//var min int
+	//if totalRounds < 3 {
+	//	min = 0
+	//} else {
+	//	min = 3
+	//}
 	// rounds 0 ~ hvs.round inclusive
-	for round := totalRounds-min; round < totalRounds; round++ {
+	for round := 0; round < totalRounds; round++ {
 		allVotes[round] = roundVotes{
 			Round:              round,
 			Prevotes:           hvs.roundVoteSets[round].Prevotes.VoteStrings(),
