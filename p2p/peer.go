@@ -396,5 +396,6 @@ func createMConnection(
 		onReceive,
 		onError,
 		config,
+		string(p.ID()),
 	)
 }

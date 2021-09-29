@@ -5,7 +5,9 @@ import (
 	"runtime/debug"
 
 	"fmt"
+	"github.com/pkg/errors"
 	"io"
+	log2 "log"
 	"math"
 	"net"
 	"reflect"
@@ -13,9 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pkg/errors"
-
-	amino "github.com/tendermint/go-amino"
+	"github.com/tendermint/go-amino"
 
 	flow "github.com/tendermint/tendermint/libs/flowrate"
 	"github.com/tendermint/tendermint/libs/log"
@@ -115,6 +115,8 @@ type MConnection struct {
 	created time.Time // time of creation
 
 	_maxPacketMsgSize int
+
+	peerID string
 }
 
 // MConnConfig is a MConnection configuration.
@@ -159,7 +161,7 @@ func NewMConnection(
 		chDescs,
 		onReceive,
 		onError,
-		DefaultMConnConfig())
+		DefaultMConnConfig(), "test")
 }
 
 // NewMConnectionWithConfig wraps net.Conn and creates multiplex connection with a config
@@ -169,6 +171,7 @@ func NewMConnectionWithConfig(
 	onReceive receiveCbFunc,
 	onError errorCbFunc,
 	config MConnConfig,
+	id string,
 ) *MConnection {
 	if config.PongTimeout >= config.PingInterval {
 		panic("pongTimeout must be less than pingInterval (otherwise, next ping will reset pong timer)")
@@ -186,6 +189,7 @@ func NewMConnectionWithConfig(
 		onError:       onError,
 		config:        config,
 		created:       time.Now(),
+		peerID:        id,
 	}
 
 	// Create channels
@@ -434,6 +438,7 @@ FOR_LOOP:
 	SELECTION:
 		select {
 		case <-c.flushTimer.Ch:
+			log2.Printf("Flushing Channel for peer: %s\n", c.peerID)
 			// NOTE: flushTimer.Set() must be called every time
 			// something is written to .bufConnWriter.
 			c.flush()
@@ -442,6 +447,7 @@ FOR_LOOP:
 				channel.updateStats()
 			}
 		case <-c.pingTimer.C:
+			log2.Printf("Ping sent to peer: %s\n", c.peerID)
 			c.Logger.Debug("Send Ping")
 			_n, err = cdc.MarshalBinaryLengthPrefixedWriter(c.bufConnWriter, PacketPing{})
 			if err != nil {
@@ -457,6 +463,7 @@ FOR_LOOP:
 			})
 			c.flush()
 		case timeout := <-c.pongTimeoutCh:
+			log2.Printf("Pong timeout (45 seconds) For peer: %s\n", c.peerID)
 			if timeout {
 				c.Logger.Debug("Pong timeout")
 				err = errors.New("pong timeout")
@@ -472,8 +479,10 @@ FOR_LOOP:
 			c.sendMonitor.Update(int(_n))
 			c.flush()
 		case <-c.quitSendRoutine:
+			log2.Printf("Quitting send routine for peer: %s\n", c.peerID)
 			break FOR_LOOP
 		case <-c.send:
+			log2.Printf("Sending packets to peer: %s\n", c.peerID)
 			// Send some PacketMsgs
 			eof := c.sendSomePacketMsgs()
 			if !eof {
@@ -486,15 +495,17 @@ FOR_LOOP:
 		}
 
 		if !c.IsRunning() {
+			log2.Printf("MConn is not running for peer: %s\n", c.peerID)
 			break FOR_LOOP
 		}
 		if err != nil {
+			log2.Printf("Connection failed @ sendRoutine for peerID: %s; with error: %s \n", c.peerID, err.Error())
 			c.Logger.Error("Connection failed @ sendRoutine", "conn", c, "err", err)
 			c.stopForError(err)
 			break FOR_LOOP
 		}
 	}
-
+	log2.Printf("Stopping pong timer and calling done send routine for peer: %s\n", c.peerID)
 	// Cleanup
 	c.stopPongTimer()
 	close(c.doneSendRoutine)
@@ -591,11 +602,13 @@ FOR_LOOP:
 			// receiving is excpected to fail since we will close the connection
 			select {
 			case <-c.quitRecvRoutine:
+				log2.Printf("Stopping receive routine for peer: %s\n", c.peerID)
 				break FOR_LOOP
 			default:
 			}
 
 			if c.IsRunning() {
+				log2.Printf("MConn in receive routine is not running peer: %s\n", c.peerID)
 				if err == io.EOF {
 					c.Logger.Info("Connection is closed @ recvRoutine (likely by the other side)", "conn", c)
 				} else {
@@ -653,7 +666,7 @@ FOR_LOOP:
 			break FOR_LOOP
 		}
 	}
-
+	log2.Printf("Cleanup receive routine for peer: %s\n", c.peerID)
 	// Cleanup
 	close(c.pong)
 	for range c.pong {
@@ -779,6 +792,7 @@ func (ch *Channel) sendBytes(bytes []byte) bool {
 		atomic.AddInt32(&ch.sendQueueSize, 1)
 		return true
 	case <-time.After(defaultSendTimeout):
+		log2.Printf("SendTimeout (10 seconds) for channel %s\n")
 		return false
 	}
 }
@@ -852,7 +866,7 @@ func (ch *Channel) writePacketMsgTo(w io.Writer) (n int64, err error) {
 // Not goroutine-safe
 func (ch *Channel) recvPacketMsg(packet PacketMsg) ([]byte, error) {
 	ch.Logger.Debug("Read PacketMsg", "conn", ch.conn, "packet", packet)
-	var recvCap, recvReceived = ch.desc.RecvMessageCapacity, len(ch.recving) + len(packet.Bytes)
+	var recvCap, recvReceived = ch.desc.RecvMessageCapacity, len(ch.recving)+len(packet.Bytes)
 	if recvCap < recvReceived {
 		return nil, fmt.Errorf("received message exceeds available capacity: %v < %v", recvCap, recvReceived)
 	}

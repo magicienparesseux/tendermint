@@ -8,7 +8,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	amino "github.com/tendermint/go-amino"
+	"github.com/tendermint/go-amino"
 
 	cstypes "github.com/tendermint/tendermint/consensus/types"
 	"github.com/tendermint/tendermint/libs/bits"
@@ -18,6 +18,7 @@ import (
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
 	tmtime "github.com/tendermint/tendermint/types/time"
+	log2 "log"
 )
 
 const (
@@ -242,10 +243,13 @@ func (conR *Reactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) {
 	case StateChannel:
 		switch msg := msg.(type) {
 		case *NewRoundStepMessage:
+			log2.Printf("Received a NewRoundStepMessage from peer: %s\n", src.ID())
 			ps.ApplyNewRoundStepMessage(msg)
 		case *NewValidBlockMessage:
+			log2.Printf("Received a NewValidBlockMessage from peer: %s\n", src.ID())
 			ps.ApplyNewValidBlockMessage(msg)
 		case *HasVoteMessage:
+			log2.Printf("Received a HasVoteMessage from peer: %s\n", src.ID())
 			ps.ApplyHasVoteMessage(msg)
 		case *VoteSetMaj23Message:
 			cs := conR.conS
@@ -266,8 +270,10 @@ func (conR *Reactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) {
 			var ourVotes *bits.BitArray
 			switch msg.Type {
 			case types.PrevoteType:
+				log2.Printf("Received a 2/3 Maj Message from peer for PREVOTE: %s\n", src.ID())
 				ourVotes = votes.Prevotes(msg.Round).BitArrayByBlockID(msg.BlockID)
 			case types.PrecommitType:
+				log2.Printf("Received a 2/3 Maj Message from peer for PRECOMMIT: %s\n", src.ID())
 				ourVotes = votes.Precommits(msg.Round).BitArrayByBlockID(msg.BlockID)
 			default:
 				panic("Bad VoteSetBitsMessage field Type. Forgot to add a check in ValidateBasic?")
@@ -290,11 +296,14 @@ func (conR *Reactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) {
 		}
 		switch msg := msg.(type) {
 		case *ProposalMessage:
+			log2.Printf("Received a Proposal Message from peer: %s\n", src.ID())
 			ps.SetHasProposal(msg.Proposal)
 			conR.conS.peerMsgQueue <- msgInfo{msg, src.ID()}
 		case *ProposalPOLMessage:
+			log2.Printf("Received a PROOF OF LOCK Message from peer: %s\n", src.ID())
 			ps.ApplyProposalPOLMessage(msg)
 		case *BlockPartMessage:
+			log2.Printf("Received a BlockPartMessage Message from peer: %s\n", src.ID())
 			ps.SetHasProposalBlockPart(msg.Height, msg.Round, msg.Part.Index)
 			conR.metrics.BlockParts.With("peer_id", string(src.ID())).Add(1)
 			conR.conS.peerMsgQueue <- msgInfo{msg, src.ID()}
@@ -309,6 +318,7 @@ func (conR *Reactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) {
 		}
 		switch msg := msg.(type) {
 		case *VoteMessage:
+			log2.Printf("Received a Vote Message from peer: %s; for type %d\n", src.ID(), msg.Vote.Type)
 			cs := conR.conS
 			cs.mtx.RLock()
 			height, valSize, lastCommitSize := cs.Height, cs.Validators.Size(), cs.LastCommit.Size()
@@ -340,8 +350,10 @@ func (conR *Reactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) {
 				var ourVotes *bits.BitArray
 				switch msg.Type {
 				case types.PrevoteType:
+					log2.Printf("[TMP] went thru VoteSetBitChannel with type PREVOTE from %s\n", src.ID())
 					ourVotes = votes.Prevotes(msg.Round).BitArrayByBlockID(msg.BlockID)
 				case types.PrecommitType:
+					log2.Printf("[TMP] went thru VoteSetBitChannel with type PRECOMMIT from %s\n", src.ID())
 					ourVotes = votes.Precommits(msg.Round).BitArrayByBlockID(msg.BlockID)
 				default:
 					panic("Bad VoteSetBitsMessage field Type. Forgot to add a check in ValidateBasic?")
@@ -486,6 +498,7 @@ OUTER_LOOP:
 					Round:  rs.Round,  // This tells peer that this part applies to us.
 					Part:   part,
 				}
+				log2.Printf("Sending proposal block parts to peer %s\n", peer.ID())
 				logger.Debug("Sending block part", "height", prs.Height, "round", prs.Round)
 				if peer.Send(DataChannel, cdc.MustMarshalBinaryBare(msg)) {
 					ps.SetHasProposalBlockPart(prs.Height, prs.Round, index)
@@ -497,7 +510,7 @@ OUTER_LOOP:
 		// If the peer is on a previous height that we have, help catch up.
 		if (0 < prs.Height) && (prs.Height < rs.Height) && (prs.Height >= conR.conS.blockStore.Base()) {
 			heightLogger := logger.With("height", prs.Height)
-
+			log2.Printf("Helping Peer Catch Up with proposal block parts to peer %s\n", peer.ID())
 			// if we never received the commit message from the peer, the block parts wont be initialized
 			if prs.ProposalBlockParts == nil {
 				blockMeta := conR.conS.blockStore.LoadBlockMeta(prs.Height)
@@ -531,6 +544,7 @@ OUTER_LOOP:
 		if rs.Proposal != nil && !prs.Proposal {
 			// Proposal: share the proposal metadata with peer.
 			{
+				log2.Printf("Seding proposal block parts to peer height and round match %s\n", peer.ID())
 				msg := &ProposalMessage{Proposal: rs.Proposal}
 				logger.Debug("Sending proposal", "height", prs.Height, "round", prs.Round)
 				if peer.Send(DataChannel, cdc.MustMarshalBinaryBare(msg)) {
@@ -633,6 +647,7 @@ OUTER_LOOP:
 		if rs.Height == prs.Height {
 			heightLogger := logger.With("height", prs.Height)
 			if conR.gossipVotesForHeight(heightLogger, rs, prs, ps) {
+				log2.Printf("Sending vote height matches, LastCommit, Prevotes, Precommits to peer: %s\n", peer.ID())
 				continue OUTER_LOOP
 			}
 		}
@@ -641,6 +656,7 @@ OUTER_LOOP:
 		// If peer is lagging by height 1, send LastCommit.
 		if prs.Height != 0 && rs.Height == prs.Height+1 {
 			if ps.PickSendVote(rs.LastCommit) {
+				log2.Printf("Sending vote peer is lagging by height 1, send LastCommit to peer: %s\n", peer.ID())
 				logger.Debug("Picked rs.LastCommit to send", "height", prs.Height)
 				continue OUTER_LOOP
 			}
@@ -653,6 +669,7 @@ OUTER_LOOP:
 			// which contains precommit signatures for prs.Height.
 			commit := conR.conS.blockStore.LoadBlockCommit(prs.Height)
 			if ps.PickSendVote(commit) {
+				log2.Printf("Sending peer is lagging by more than 1, send Commit to peer: %s\n", peer.ID())
 				logger.Debug("Picked Catchup commit to send", "height", prs.Height)
 				continue OUTER_LOOP
 			}
@@ -668,7 +685,7 @@ OUTER_LOOP:
 			// Continued sleep...
 			sleeping = 1
 		}
-
+		log2.Printf("In send loop, but didn't send anything...\n")
 		time.Sleep(conR.conS.config.PeerGossipSleepDuration)
 		continue OUTER_LOOP
 	}
@@ -752,6 +769,7 @@ OUTER_LOOP:
 			prs := ps.GetRoundState()
 			if rs.Height == prs.Height {
 				if maj23, ok := rs.Votes.Prevotes(prs.Round).TwoThirdsMajority(); ok {
+					log2.Printf("Sending peer 2/3 height/round/prevotes PREVOTE to peer: %s\n", peer.ID())
 					peer.TrySend(StateChannel, cdc.MustMarshalBinaryBare(&VoteSetMaj23Message{
 						Height:  prs.Height,
 						Round:   prs.Round,
@@ -769,6 +787,7 @@ OUTER_LOOP:
 			prs := ps.GetRoundState()
 			if rs.Height == prs.Height {
 				if maj23, ok := rs.Votes.Precommits(prs.Round).TwoThirdsMajority(); ok {
+					log2.Printf("Sending peer 2/3 height/round/prevotes PRECOMMIT to peer: %s\n", peer.ID())
 					peer.TrySend(StateChannel, cdc.MustMarshalBinaryBare(&VoteSetMaj23Message{
 						Height:  prs.Height,
 						Round:   prs.Round,
@@ -786,6 +805,7 @@ OUTER_LOOP:
 			prs := ps.GetRoundState()
 			if rs.Height == prs.Height && prs.ProposalPOLRound >= 0 {
 				if maj23, ok := rs.Votes.Prevotes(prs.ProposalPOLRound).TwoThirdsMajority(); ok {
+					log2.Printf("Sending peer 2/3 height/round/prevotes PREVOTES WITH POL to peer: %s\n", peer.ID())
 					peer.TrySend(StateChannel, cdc.MustMarshalBinaryBare(&VoteSetMaj23Message{
 						Height:  prs.Height,
 						Round:   prs.ProposalPOLRound,
@@ -806,6 +826,7 @@ OUTER_LOOP:
 			if prs.CatchupCommitRound != -1 && prs.Height > 0 && prs.Height <= conR.conS.blockStore.Height() &&
 				prs.Height >= conR.conS.blockStore.Base() {
 				if commit := conR.conS.LoadCommit(prs.Height); commit != nil {
+					log2.Printf("Sending peer 2/3 Height/CatchupCommitRound/CatchupCommit to peer: %s\n", peer.ID())
 					peer.TrySend(StateChannel, cdc.MustMarshalBinaryBare(&VoteSetMaj23Message{
 						Height:  prs.Height,
 						Round:   commit.Round(),
@@ -916,7 +937,7 @@ type PeerState struct {
 	peer   p2p.Peer
 	logger log.Logger
 
-	mtx   sync.Mutex             // NOTE: Modify below using setters, never directly.
+	mtx   sync.Mutex                                  // NOTE: Modify below using setters, never directly.
 	PRS   cstypes.PeerRoundState `json:"round_state"` // Exposed.
 	Stats *peerStateStats        `json:"stats"`       // Exposed.
 }

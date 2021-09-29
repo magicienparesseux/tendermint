@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-
 	"github.com/tendermint/tendermint/libs/fail"
 	"github.com/tendermint/tendermint/libs/log"
 	tmos "github.com/tendermint/tendermint/libs/os"
 	"github.com/tendermint/tendermint/libs/service"
 	tmtime "github.com/tendermint/tendermint/types/time"
+	log2 "log"
 
 	cfg "github.com/tendermint/tendermint/config"
 	cstypes "github.com/tendermint/tendermint/consensus/types"
@@ -718,10 +718,12 @@ func (cs *State) handleMsg(mi msgInfo) {
 	msg, peerID := mi.Msg, mi.PeerID
 	switch msg := msg.(type) {
 	case *ProposalMessage:
+		log2.Printf("Handling PROPOSAL Message from <Internal/Peer> Message Queue received from Peer: %s\n", peerID)
 		// will not cause transition.
 		// once proposal is set, we can receive block parts
 		err = cs.setProposal(msg.Proposal)
 	case *BlockPartMessage:
+		log2.Printf("Handling BLOCK-PART Message from <Internal/Peer> Message Queue received from Peer: %s\n", peerID)
 		// if the proposal is complete, we'll enterPrevote or tryFinalizeCommit
 		added, err = cs.addProposalBlockPart(msg, peerID)
 		if added {
@@ -740,6 +742,7 @@ func (cs *State) handleMsg(mi msgInfo) {
 			err = nil
 		}
 	case *VoteMessage:
+		log2.Printf("Handling VOTE Message TYPE %s from <Internal/Peer> Message Queue received from Peer: %s\n", msg.Vote.Type, peerID)
 		// attempt to add the vote and dupeout the validator if its a duplicate signature
 		// if the vote gives us a 2/3-any or 2/3-one, we transition
 		added, err = cs.tryAddVote(msg.Vote, peerID)
@@ -789,6 +792,7 @@ func (cs *State) handleTimeout(ti timeoutInfo, rs cstypes.RoundState) {
 
 	switch ti.Step {
 	case cstypes.RoundStepNewHeight:
+		log2.Printf("Consensus timeout for step: %s\nEntering New Step: %s with height/round %d/%d\n", ti.Step.String(), cstypes.RoundStepNewRound, ti.Height, ti.Round)
 		// NewRound event fired from enterNewRound.
 		// XXX: should we fire timeout here (for timeout commit)?
 		if rs.Height == chainHaltHeight {
@@ -797,6 +801,7 @@ func (cs *State) handleTimeout(ti timeoutInfo, rs cstypes.RoundState) {
 			cs.enterNewRound(ti.Height, 0)
 		}
 	case cstypes.RoundStepNewRound:
+		log2.Printf("Consensus timeout for step: %s\nEntering New Step: %s with height/round %d/%d\n", ti.Step.String(), cstypes.RoundStepPropose, ti.Height, ti.Round)
 		if rs.Height == chainHaltHeight {
 			cs.Logger.Info("Enter Round Step New Round")
 			cs.enterPropose(ti.Height, rs.Round)
@@ -804,12 +809,16 @@ func (cs *State) handleTimeout(ti timeoutInfo, rs cstypes.RoundState) {
 			cs.enterPropose(ti.Height, 0)
 		}
 	case cstypes.RoundStepPropose:
+		log2.Printf("Consensus timeout for step: %s\nEntering New Step: %s with height/round %d/%d\n", ti.Step.String(), cstypes.RoundStepPrevote, ti.Height, ti.Round)
 		cs.eventBus.PublishEventTimeoutPropose(cs.RoundStateEvent())
 		cs.enterPrevote(ti.Height, ti.Round)
 	case cstypes.RoundStepPrevoteWait:
+		log2.Printf("Consensus timeout for step: %s\nEntering New Step: %s with height/round %d/%d\n", ti.Step.String(), cstypes.RoundStepPrecommit, ti.Height, ti.Round)
 		cs.eventBus.PublishEventTimeoutWait(cs.RoundStateEvent())
 		cs.enterPrecommit(ti.Height, ti.Round)
 	case cstypes.RoundStepPrecommitWait:
+		log2.Printf("Consensus timeout for step: %s\nEntering New Step: %s AND %s with height/round %d/%d AND height/round %d/%d\n\n", ti.Step.String(),
+			cstypes.RoundStepPrecommit, ti.Height, ti.Round, cstypes.RoundStepNewRound, ti.Height, ti.Round+1)
 		cs.eventBus.PublishEventTimeoutWait(cs.RoundStateEvent())
 		cs.enterPrecommit(ti.Height, ti.Round)
 		cs.enterNewRound(ti.Height, ti.Round+1)

@@ -2,17 +2,16 @@ package state
 
 import (
 	"fmt"
-	"github.com/tendermint/tendermint/state/txindex"
-	"time"
-
-	dbm "github.com/tendermint/tm-db"
-
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/libs/fail"
 	"github.com/tendermint/tendermint/libs/log"
 	mempl "github.com/tendermint/tendermint/mempool"
 	"github.com/tendermint/tendermint/proxy"
+	"github.com/tendermint/tendermint/state/txindex"
 	"github.com/tendermint/tendermint/types"
+	dbm "github.com/tendermint/tm-db"
+	log2 "log"
+	"time"
 )
 
 //-----------------------------------------------------------------------------
@@ -273,7 +272,7 @@ func execBlockOnProxyApp(
 	stateDB dbm.DB,
 ) (*ABCIResponses, error) {
 	var validTxs, invalidTxs = 0, 0
-
+	s := time.Now()
 	txIndex := 0
 	abciResponses := NewABCIResponses(block)
 
@@ -327,7 +326,7 @@ func execBlockOnProxyApp(
 	}
 
 	logger.Info("Executed block", "height", block.Height, "validTxs", validTxs, "invalidTxs", invalidTxs)
-
+	log2.Printf("Height %d; Apply Block took %s\n", block.Height, time.Since(s).String())
 	return abciResponses, nil
 }
 
