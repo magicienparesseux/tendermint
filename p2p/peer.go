@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net"
 	"time"
-
+	log2 "log"
 	"github.com/tendermint/tendermint/libs/cmap"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/libs/service"
@@ -196,9 +196,13 @@ func (p *peer) FlushStop() {
 
 // OnStop implements BaseService.
 func (p *peer) OnStop() {
+	log2.Printf("STEP: 2.1 OnStop() Called for Peer %s \n", p.ID())
 	p.metricsTicker.Stop()
+	log2.Printf("STEP: 2.2 MetricsTicker Stopped for Peer %s \n", p.ID())
 	p.BaseService.OnStop()
+	log2.Printf("STEP: 2.3 BaseService Stopped for Peer %s \n", p.ID())
 	p.mconn.Stop() // stop everything and close the conn
+	log2.Printf("STEP: 2.4 MCONN Stopped for Peer %s \n", p.ID())
 }
 
 //---------------------------------------------------

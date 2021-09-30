@@ -352,6 +352,9 @@ func (c *MConnection) stopForError(r interface{}) {
 	if atomic.CompareAndSwapUint32(&c.errored, 0, 1) {
 		if c.onError != nil {
 			c.onError(r)
+		} else {
+			log2.Printf("PEER ONERROR NIL!!! for peer %s\n", c.peerID)
+			panic("PEER ONERROR NIL!!!")
 		}
 	}
 }

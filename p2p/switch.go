@@ -7,12 +7,12 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-
 	"github.com/tendermint/tendermint/config"
 	"github.com/tendermint/tendermint/libs/cmap"
 	"github.com/tendermint/tendermint/libs/rand"
 	"github.com/tendermint/tendermint/libs/service"
 	"github.com/tendermint/tendermint/p2p/conn"
+	log2 "log"
 )
 
 const (
@@ -238,15 +238,23 @@ func (sw *Switch) OnStart() error {
 
 // OnStop implements BaseService. It stops all peers and reactors.
 func (sw *Switch) OnStop() {
+	log2.Printf("STOP() For PeerSwitch Called; Attempting to stop peers, if gets hung -> report!\n")
+	log2.Printf("Attempting to stop/remove all peers\n")
 	// Stop peers
 	for _, p := range sw.peers.List() {
 		sw.stopAndRemovePeer(p, nil)
+		log2.Printf("Successfully removed peer %s\n", p.ID())
 	}
-
+	log2.Printf("Attempting to stop all reactors!!\n")
 	// Stop reactors
 	sw.Logger.Debug("Switch: Stopping reactors")
 	for _, reactor := range sw.reactors {
-		reactor.Stop()
+		err := reactor.Stop()
+		if err != nil {
+			log2.Printf("ERROR stopping reactor!!! %s; Error: %s\n", reactor.String(), err.Error())
+		} else {
+			log2.Printf("Successfully stopped reactor %s\n", reactor.String())
+		}
 	}
 }
 
@@ -349,13 +357,18 @@ func (sw *Switch) StopPeerGracefully(peer Peer) {
 }
 
 func (sw *Switch) stopAndRemovePeer(peer Peer, reason interface{}) {
+	log2.Printf("Stopping peer %s sequence exectuted for reason %v\n!Watch Carefully For All 4 Steps!\n", peer.ID(), reason)
 	sw.transport.Cleanup(peer)
+	log2.Printf("STEP 1: Transport Cleanup Finished Successfully for peer %s\n", peer.ID())
 	peer.Stop()
-
+	log2.Printf("STEP 2: Peer Stop() Finished Successfully for peer %s\n", peer.ID())
+	log2.Printf("STEP 3: Started for peer: %s!Watch Carefully For All Reactors!\n", peer.ID())
+	i := 0
 	for _, reactor := range sw.reactors {
+		i++
 		reactor.RemovePeer(peer, reason)
+		log2.Printf("STEP 3.%d: RemovePeer for Reactor: %s Finished For Peer: %s!Watch Carefully For All Reactors!\n", i, reactor.String(), peer.ID())
 	}
-
 	// Removing a peer should go last to avoid a situation where a peer
 	// reconnect to our node and the switch calls InitPeer before
 	// RemovePeer is finished.
@@ -363,6 +376,7 @@ func (sw *Switch) stopAndRemovePeer(peer Peer, reason interface{}) {
 	if sw.peers.Remove(peer) {
 		sw.metrics.Peers.Add(float64(-1))
 	}
+	log2.Printf("STEP 4: Peer %s removed from switch", peer.ID())
 }
 
 // reconnectToPeer tries to reconnect to the addr, first repeatedly
