@@ -221,7 +221,7 @@ func (bcR *BlockchainReactor) RemovePeer(peer p2p.Peer, reason interface{}) {
 	}
 	atomic.AddInt64(&counter, 1)
 	log2.Println("Size of the ErrorQueue ", len(bcR.errorsForFSMCh))
-	log2.Println("Size of the RemovePeerCounter ", counter)
+	log2.Println("Added peer: Size of the RemovePeerCounter ", counter)
 	bcR.errorsForFSMCh <- msgData
 }
 
@@ -375,6 +375,7 @@ ForLoop:
 		case msg := <-bcR.errorsForFSMCh:
 			if msg.event == peerRemoveEv {
 				atomic.AddInt64(&counter, -1)
+				log2.Println("Removed peer. Size of the RemovePeerCounter ", counter)
 			}
 			// Sent from the switch.RemovePeer() routine (RemovePeerEv) and
 			// FSM state timer expiry routine (stateTimeoutEv).
