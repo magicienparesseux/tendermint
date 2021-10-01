@@ -3,7 +3,9 @@ package v1
 import (
 	"errors"
 	"fmt"
+	log2 "log"
 	"reflect"
+	"sync/atomic"
 	"time"
 
 	amino "github.com/tendermint/go-amino"
@@ -39,6 +41,8 @@ var (
 	maxRequestsPerPeer = 20
 	// Maximum number of block requests for the reactor, pending or for which blocks have been received.
 	maxNumRequests = 64
+
+	counter uint64
 )
 
 type consensusReactor interface {
@@ -215,7 +219,10 @@ func (bcR *BlockchainReactor) RemovePeer(peer p2p.Peer, reason interface{}) {
 			err:    errSwitchRemovesPeer,
 		},
 	}
+	log2.Println("Size of the ErrorQueue ", len(bcR.errorsForFSMCh))
+	log2.Println("Size of the RemovePeerCounter ", counter)
 	bcR.errorsForFSMCh <- msgData
+	atomic.AddUint64(&counter, 1)
 }
 
 // Receive implements Reactor by handling 4 types of messages (look below).
