@@ -42,7 +42,7 @@ var (
 	// Maximum number of block requests for the reactor, pending or for which blocks have been received.
 	maxNumRequests = 64
 
-	counter uint64
+	counter int64
 )
 
 type consensusReactor interface {
@@ -219,10 +219,10 @@ func (bcR *BlockchainReactor) RemovePeer(peer p2p.Peer, reason interface{}) {
 			err:    errSwitchRemovesPeer,
 		},
 	}
+	atomic.AddInt64(&counter, 1)
 	log2.Println("Size of the ErrorQueue ", len(bcR.errorsForFSMCh))
 	log2.Println("Size of the RemovePeerCounter ", counter)
 	bcR.errorsForFSMCh <- msgData
-	atomic.AddUint64(&counter, 1)
 }
 
 // Receive implements Reactor by handling 4 types of messages (look below).
@@ -374,7 +374,7 @@ ForLoop:
 
 		case msg := <-bcR.errorsForFSMCh:
 			if msg.event == peerRemoveEv {
-				atomic.AddUint64(&counter, ^uint64(0))
+				atomic.AddInt64(&counter, -1)
 			}
 			// Sent from the switch.RemovePeer() routine (RemovePeerEv) and
 			// FSM state timer expiry routine (stateTimeoutEv).
