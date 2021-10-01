@@ -373,6 +373,9 @@ ForLoop:
 			_ = bcR.fsm.Handle(&msg)
 
 		case msg := <-bcR.errorsForFSMCh:
+			if msg.event == peerRemoveEv {
+				atomic.AddUint64(&counter, ^uint64(0))
+			}
 			// Sent from the switch.RemovePeer() routine (RemovePeerEv) and
 			// FSM state timer expiry routine (stateTimeoutEv).
 			_ = bcR.fsm.Handle(&msg)
