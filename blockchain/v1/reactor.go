@@ -78,6 +78,8 @@ type BlockchainReactor struct {
 	eventsFromFSMCh chan bcFsmMessage
 
 	swReporter *behaviour.SwitchReporter
+
+	syncEnded int32
 }
 
 // NewBlockchainReactor returns new reactor instance.
@@ -149,6 +151,8 @@ func (bcR *BlockchainReactor) OnStart() error {
 	bcR.swReporter = behaviour.NewSwitchReporter(bcR.BaseReactor.Switch)
 	if bcR.fastSync {
 		go bcR.poolRoutine()
+	} else {
+		bcR.setSyncEnded()
 	}
 	return nil
 }
@@ -156,6 +160,14 @@ func (bcR *BlockchainReactor) OnStart() error {
 // OnStop implements service.Service.
 func (bcR *BlockchainReactor) OnStop() {
 	_ = bcR.Stop()
+}
+
+func (bcR *BlockchainReactor) isSyncEnded() bool {
+	return atomic.LoadInt32(&(bcR.syncEnded)) != 0
+}
+
+func (bcR *BlockchainReactor) setSyncEnded() {
+	atomic.StoreInt32(&(bcR.syncEnded), 1)
 }
 
 // GetChannels implements Reactor
@@ -212,6 +224,9 @@ func (bcR *BlockchainReactor) sendStatusResponseToPeer(msg *bcStatusRequestMessa
 
 // RemovePeer implements Reactor by removing peer from the pool.
 func (bcR *BlockchainReactor) RemovePeer(peer p2p.Peer, reason interface{}) {
+	if bcR.isSyncEnded() {
+		return
+	}
 	msgData := bcReactorMessage{
 		event: peerRemoveEv,
 		data: bReactorEventData{
@@ -258,6 +273,10 @@ func (bcR *BlockchainReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 		}
 
 	case *bcBlockResponseMessage:
+		if bcR.isSyncEnded() {
+			return
+		}
+
 		msgForFSM := bcReactorMessage{
 			event: blockResponseEv,
 			data: bReactorEventData{
@@ -271,6 +290,9 @@ func (bcR *BlockchainReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 		bcR.messagesForFSMCh <- msgForFSM
 
 	case *bcStatusResponseMessage:
+		if bcR.isSyncEnded() {
+			return
+		}
 		// Got a peer status. Unverified.
 		msgForFSM := bcReactorMessage{
 			event: statusResponseEv,
@@ -299,6 +321,8 @@ func (bcR *BlockchainReactor) processBlocksRoutine(stopProcessing chan struct{})
 ForLoop:
 	for {
 		select {
+		case <-bcR.Quit():
+			break ForLoop
 		case <-stopProcessing:
 			bcR.Logger.Info("finishing block execution")
 			break ForLoop
@@ -385,6 +409,7 @@ ForLoop:
 			switch msg.event {
 			case syncFinishedEv:
 				stopProcessing <- struct{}{}
+				bcR.setSyncEnded()
 				// Sent from the FSM when it enters finished state.
 				break ForLoop
 			case peerErrorEv:
