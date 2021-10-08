@@ -91,7 +91,7 @@ func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *st
 			store.Height()))
 	}
 
-	const capacity = 1000
+	const capacity = 8000
 	eventsFromFSMCh := make(chan bcFsmMessage, capacity)
 	messagesForFSMCh := make(chan bcReactorMessage, capacity)
 	errorsForFSMCh := make(chan bcReactorMessage, capacity)

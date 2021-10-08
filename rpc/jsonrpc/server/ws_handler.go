@@ -24,7 +24,7 @@ import (
 ///////////////////////////////////////////////////////////////////////////////
 
 const (
-	defaultWSWriteChanCapacity = 1000
+	defaultWSWriteChanCapacity = 8000
 	defaultWSWriteWait         = 10 * time.Second
 	defaultWSReadWait          = 30 * time.Second
 	defaultWSPingPeriod        = (defaultWSReadWait * 9) / 10

@@ -42,7 +42,7 @@ var timeoutPropose = time.Minute * 20
 //-----------------------------------------------------------------------------
 
 var (
-	msgQueueSize = 1000
+	msgQueueSize = 8000
 )
 
 // msgs from the reactor which may update the state

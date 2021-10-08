@@ -80,7 +80,7 @@ func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *st
 
 	requestsCh := make(chan BlockRequest, maxTotalRequesters)
 
-	const capacity = 1000                      // must be bigger than peers count
+	const capacity = 8000                      // must be bigger than peers count
 	errorsCh := make(chan peerError, capacity) // so we don't block in #Receive#pool.AddBlock
 
 	pool := NewBlockPool(
@@ -131,7 +131,7 @@ func (bcR *BlockchainReactor) GetChannels() []*p2p.ChannelDescriptor {
 		{
 			ID:                  BlockchainChannel,
 			Priority:            10,
-			SendQueueCapacity:   1000,
+			SendQueueCapacity:   6000,
 			RecvBufferCapacity:  50 * 4096,
 			RecvMessageCapacity: maxMsgSize,
 		},
