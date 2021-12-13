@@ -37,11 +37,10 @@ const (
 var (
 	// Maximum number of requests that can be pending per peer, i.e. for which requests have been sent but blocks
 	// have not been received.
-	maxRequestsPerPeer = 20
+	defaultMaxRequestsPerPeer = 20
 	// Maximum number of block requests for the reactor, pending or for which blocks have been received.
-	maxNumRequests = 64
-
-	counter int64
+	defaultMaxNumRequests = 64
+	counter               int64
 )
 
 type consensusReactor interface {
@@ -79,33 +78,49 @@ type BlockchainReactor struct {
 	swReporter *behaviour.SwitchReporter
 
 	syncEnded int32
+
+	maxRequestsPerPeer int
+	maxNumRequests     int
+	capacity           int
 }
 
 // NewBlockchainReactor returns new reactor instance.
 func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *store.BlockStore,
-	fastSync bool) *BlockchainReactor {
+	fastSync bool, args ...int) *BlockchainReactor {
 
 	if state.LastBlockHeight != store.Height() {
 		panic(fmt.Sprintf("state (%v) and store (%v) height mismatch", state.LastBlockHeight,
 			store.Height()))
 	}
 
-	const capacity = 1000
+	capacity := 1000
+	maxRequestsPerPeer := defaultMaxRequestsPerPeer
+	maxNumRequests := defaultMaxNumRequests
+
+	if len(args) == 3 {
+		maxRequestsPerPeer = args[0]
+		maxNumRequests = args[1]
+		capacity = args[2]
+	}
+
 	eventsFromFSMCh := make(chan bcFsmMessage, capacity)
 	messagesForFSMCh := make(chan bcReactorMessage, capacity)
 	errorsForFSMCh := make(chan bcReactorMessage, capacity)
 
 	startHeight := store.Height() + 1
 	bcR := &BlockchainReactor{
-		initialState:     state,
-		state:            state,
-		blockExec:        blockExec,
-		fastSync:         fastSync,
-		store:            store,
-		messagesForFSMCh: messagesForFSMCh,
-		eventsFromFSMCh:  eventsFromFSMCh,
-		errorsForFSMCh:   errorsForFSMCh,
+		initialState:       state,
+		state:              state,
+		blockExec:          blockExec,
+		fastSync:           fastSync,
+		store:              store,
+		messagesForFSMCh:   messagesForFSMCh,
+		eventsFromFSMCh:    eventsFromFSMCh,
+		errorsForFSMCh:     errorsForFSMCh,
+		maxRequestsPerPeer: maxRequestsPerPeer,
+		maxNumRequests:     maxNumRequests,
 	}
+
 	fsm := NewFSM(startHeight, bcR)
 	bcR.fsm = fsm
 	bcR.BaseReactor = *p2p.NewBaseReactor("BlockchainReactor", bcR)
@@ -384,7 +399,7 @@ ForLoop:
 			_ = bcR.fsm.Handle(&bcReactorMessage{
 				event: makeRequestsEv,
 				data: bReactorEventData{
-					maxNumRequests: maxNumRequests}})
+					maxNumRequests: bcR.maxNumRequests}})
 
 		case <-statusUpdateTicker.C:
 			// Ask for status updates.
@@ -477,6 +492,14 @@ func (bcR *BlockchainReactor) processBlock() error {
 	}
 
 	return nil
+}
+
+func (bcR *BlockchainReactor) getMaxRequestsPerPeer() int {
+	return bcR.maxRequestsPerPeer
+}
+
+func (bcR *BlockchainReactor) getMaxNumRequests() int {
+	return bcR.maxNumRequests
 }
 
 // Implements bcRNotifier

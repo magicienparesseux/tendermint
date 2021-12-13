@@ -79,6 +79,91 @@ type BlockchainReactorPair struct {
 	conR *consensusReactorTest
 }
 
+func newProxyApp() *proxy.proxyAppConn {
+	app := &testApp{}
+	cc := proxy.NewLocalClientCreator(app)
+	proxyApp := proxy.NewAppConns(cc)
+	err := proxyApp.Start()
+	if err != nil {
+		panic(errors.Wrap(err, "error start app"))
+	}
+	return proxyApp
+}
+
+type BlockchainReactorBlockState struct {
+	store    *types.BlockStore
+	state    *types.State
+	executor *types.BlockExecutor
+}
+
+func newBlockStore(
+	genesis *types.Genesis,
+	consensus proxy.AppConnConsensus,
+	privateValidators []types.PrivValidator,
+	maxBlockHeight int64,
+	fastSync bool) *BlockchainReactorBlockState {
+
+	blockDB := dbm.NewMemDB()
+	stateDB := dbm.NewMemDB()
+	blockStore := store.NewBlockStore(blockDB)
+
+	state, err := sm.LoadStateFromDBOrGenesisDoc(stateDB, genesis)
+	if err != nil {
+		panic(errors.Wrap(err, "error constructing state from genesis file"))
+	}
+
+	db := dbm.NewMemDB()
+	sm.SaveState(db, state)
+
+	blockExecutor := sm.NewBlockExecutor(
+		db,
+		log.TestingLogger(),
+		consensus,
+		mock.Mempool{},
+		sm.MockEvidencePool{},
+	)
+
+	for blockHeight := int64(1); blockHeight <= maxBlockHeight; blockHeight++ {
+		lastCommit := types.NewCommit(blockHeight-1, 1, types.BlockID{}, nil)
+		if blockHeight > 1 {
+			lastBlockMeta := blockStore.LoadBlockMeta(blockHeight - 1)
+			lastBlock := blockStore.LoadBlock(blockHeight - 1)
+
+			vote := makeVote(t, &lastBlock.Header, lastBlockMeta.BlockID, state.Validators, privateValidators[0])
+			lastCommit = types.NewCommit(vote.Height, vote.Round, lastBlockMeta.BlockID, []types.CommitSig{vote.CommitSig()})
+		}
+
+		thisBlock := makeBlock(blockHeight, state, lastCommit)
+		thisParts := thisBlock.MakePartSet(types.BlockPartSizeBytes)
+
+		blockID := types.BlockID{Hash: thisBlock.Hash(), PartsHeader: thisParts.Header()}
+
+		state, _, err = blockExec.ApplyBlock(state, blockID, thisBlock)
+		if err != nil {
+			panic(errors.Wrap(err, "error apply block"))
+		}
+
+		blockStore.SaveBlock(thisBlock, thisParts, lastCommit)
+	}
+
+	return &BlockchainReactorBlockState{
+		state:    state.Copy(),
+		store:    blockStore,
+		executor: blockExecutor,
+	}
+}
+
+func getBlockchainReactor(
+	t *testing.T,
+	logger log.Logger,
+	bcBlockState *BlockchainReactorBlockState,
+	fastSync bool,
+) *BlockchainReactor {
+	bcReactor := NewBlockchainReactor(bcBlockState.state, bcBlockState.Executor, bcBlockState.store, fastSync)
+	bcReactor.SetLogger(logger.With("module", "blockchain"))
+	return bcReactor
+}
+
 func newBlockchainReactor(
 	t *testing.T,
 	logger log.Logger,
@@ -435,4 +520,102 @@ func makeBlock(height int64, state sm.State, lastCommit *types.Commit) *types.Bl
 
 type testApp struct {
 	abci.BaseApplication
+}
+
+func TestFastSyncBadBlockStopsPeer(t *testing.T) {
+	numNodes := 4
+	maxBlockHeight := int64(148)
+
+	config = cfg.ResetTestRoot("blockchain_reactor_test")
+	defer os.RemoveAll(config.RootDir)
+	genDoc, privVals := randGenesisDoc(1, false, 30)
+
+	otherChain := newBlockchainReactorPair(t, log.TestingLogger(), genDoc, privVals, maxBlockHeight)
+	defer func() {
+		_ = otherChain.bcR.Stop()
+		_ = otherChain.conR.Stop()
+	}()
+
+	reactorPairs := make([]BlockchainReactorPair, numNodes)
+	logger := make([]log.Logger, numNodes)
+
+	for i := 0; i < numNodes; i++ {
+		logger[i] = log.TestingLogger()
+		height := int64(0)
+		if i == 0 {
+			height = maxBlockHeight
+		}
+		reactorPairs[i] = newBlockchainReactorPair(t, logger[i], genDoc, privVals, height)
+	}
+
+	switches := p2p.MakeConnectedSwitches(config.P2P, numNodes, func(i int, s *p2p.Switch) *p2p.Switch {
+		reactorPairs[i].conR.mtx.Lock()
+		s.AddReactor("BLOCKCHAIN", reactorPairs[i].bcR)
+		s.AddReactor("CONSENSUS", reactorPairs[i].conR)
+		moduleName := fmt.Sprintf("blockchain-%v", i)
+		reactorPairs[i].bcR.SetLogger(logger[i].With("module", moduleName))
+		reactorPairs[i].conR.mtx.Unlock()
+		return s
+
+	}, p2p.Connect2Switches)
+
+	defer func() {
+		for _, r := range reactorPairs {
+			_ = r.bcR.Stop()
+			_ = r.conR.Stop()
+		}
+	}()
+
+outerFor:
+	for {
+		time.Sleep(10 * time.Millisecond)
+		for i := 0; i < numNodes; i++ {
+			reactorPairs[i].conR.mtx.Lock()
+			if !reactorPairs[i].conR.switchedToConsensus {
+				reactorPairs[i].conR.mtx.Unlock()
+				continue outerFor
+			}
+			reactorPairs[i].conR.mtx.Unlock()
+		}
+		break
+	}
+
+	//at this time, reactors[0-3] is the newest
+	assert.Equal(t, numNodes-1, reactorPairs[1].bcR.Switch.Peers().Size())
+
+	//mark last reactorPair as an invalid peer
+	reactorPairs[numNodes-1].bcR.store = otherChain.bcR.store
+
+	lastLogger := log.TestingLogger()
+	lastReactorPair := newBlockchainReactorPair(t, lastLogger, genDoc, privVals, 0)
+	reactorPairs = append(reactorPairs, lastReactorPair)
+
+	switches = append(switches, p2p.MakeConnectedSwitches(config.P2P, 1, func(i int, s *p2p.Switch) *p2p.Switch {
+		s.AddReactor("BLOCKCHAIN", reactorPairs[len(reactorPairs)-1].bcR)
+		s.AddReactor("CONSENSUS", reactorPairs[len(reactorPairs)-1].conR)
+		moduleName := fmt.Sprintf("blockchain-%v", len(reactorPairs)-1)
+		reactorPairs[len(reactorPairs)-1].bcR.SetLogger(lastLogger.With("module", moduleName))
+		return s
+
+	}, p2p.Connect2Switches)...)
+
+	for i := 0; i < len(reactorPairs)-1; i++ {
+		p2p.Connect2Switches(switches, i, len(reactorPairs)-1)
+	}
+
+	for {
+		time.Sleep(1 * time.Second)
+		lastReactorPair.conR.mtx.Lock()
+		if lastReactorPair.conR.switchedToConsensus {
+			lastReactorPair.conR.mtx.Unlock()
+			break
+		}
+		lastReactorPair.conR.mtx.Unlock()
+
+		if lastReactorPair.bcR.Switch.Peers().Size() == 0 {
+			break
+		}
+	}
+
+	assert.True(t, lastReactorPair.bcR.Switch.Peers().Size() < len(reactorPairs)-1)
 }

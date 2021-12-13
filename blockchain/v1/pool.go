@@ -210,6 +210,8 @@ func (pool *BlockPool) makeRequestBatch(maxNumRequests int) []int {
 }
 
 func (pool *BlockPool) sendRequest(height int64) bool {
+
+	maxRequestsPerPeer := pool.toBcR.getMaxRequestsPerPeer()
 	for _, peer := range pool.peers {
 		if peer.NumPendingBlockRequests >= maxRequestsPerPeer {
 			continue
@@ -366,5 +368,6 @@ func (pool *BlockPool) NumPeers() int {
 
 // NeedsBlocks returns true if more blocks are required.
 func (pool *BlockPool) NeedsBlocks() bool {
+	maxNumRequests := pool.toBcR.getMaxNumRequests()
 	return len(pool.blocks) < maxNumRequests
 }

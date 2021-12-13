@@ -355,6 +355,8 @@ func init() {
 // informing of peer errors and state timeouts
 // Implemented by BlockchainReactor and tests
 type bcReactor interface {
+	getMaxNumRequests() int
+	getMaxRequestsPerPeer() int
 	sendStatusRequest()
 	sendBlockRequest(peerID p2p.ID, height int64) error
 	sendPeerError(err error, peerID p2p.ID)
