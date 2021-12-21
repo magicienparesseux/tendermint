@@ -116,9 +116,9 @@ func (evpool *Pool) IsPending(evidence types.Evidence) bool {
 func (evpool *Pool) AddEvidence(evidence types.Evidence) error {
 
 	// check if evidence is already stored
-	//if evpool.store.Has(evidence) {
-	//	return ErrEvidenceAlreadyStored{}
-	//}
+	if evpool.store.Has(evidence) {
+		return ErrEvidenceAlreadyStored{}
+	}
 
 	// We have already verified this piece of evidence - no need to do it again
 	if evpool.IsPending(evidence) {
