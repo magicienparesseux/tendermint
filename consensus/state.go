@@ -2011,7 +2011,7 @@ func (cs *State) signAddVote(msgType types.SignedMsgType, hash []byte, header ty
 		//}
 
 	}
-	return nil
+	return votes
 }
 
 //---------------------------------------------------------
